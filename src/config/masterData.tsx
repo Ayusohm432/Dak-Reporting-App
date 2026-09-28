@@ -1,10 +1,10 @@
 import { View, Text, StyleSheet } from "react-native";
 
-export default function ExportScreen() {
+export default function MasterDataScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Export Reports</Text>
-      <Text>Excel and PDF export will be implemented later.</Text>
+      <Text style={styles.title}>Master Data</Text>
+      <Text>District, block and Panchayat options will be managed here.</Text>
     </View>
   );
 }
