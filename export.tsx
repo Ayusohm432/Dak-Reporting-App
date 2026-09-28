@@ -3,9 +3,9 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { router } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { Picker } from "@react-native-picker/picker";
-import type { DakReport } from "../../models/DakReport";
-import { getReports } from "../../database/reportRepository";
-import { exportReportsToExcel, exportReportsToPdf } from "../../services/reportExport";
+import type { DakReport } from "./src/models/DakReport";
+import { getAllReports } from "./src/database/reportRepository";
+import { exportReportsToExcel, exportReportsToPdf } from "./src/services/reportExport";
 
 export default function ExportReportsScreen() {
   const db = useSQLiteContext();
@@ -18,7 +18,7 @@ export default function ExportReportsScreen() {
     let mounted = true;
     (async () => {
       try {
-        const all = await getReports(db);
+        const all = await getAllReports(db);
         if (!mounted) return;
         setReports(all);
         const periods = Array.from(new Set(all.map((r) => r.reportingPeriod).filter(Boolean)));

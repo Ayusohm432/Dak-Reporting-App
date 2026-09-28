@@ -108,7 +108,7 @@ export default function ExportReportsScreen() {
             {exporting === "pdf" ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>PDF Export करें</Text>}
           </Pressable>
           <Text style={styles.note}>
-            नोट: PDF में 62 कॉलम एक landscape पेज पर फिट करने के लिए बहुत छोटा फ़ॉन्ट इस्तेमाल होता है। लंबे टेक्स्ट और रिपोर्टों की संख्या के कारण कुछ डिवाइस पर PDF एक से अधिक पेज में जा सकती है।
+            नोट: PDF सभी रिपोर्टों को एक landscape पेज में फिट करती है। 62 कॉलम के कारण फ़ॉन्ट छोटा होगा और लंबे मान कट सकते हैं; पूरी जानकारी के लिए Excel export उपयोग करें।
           </Text>
         </>
       )}
