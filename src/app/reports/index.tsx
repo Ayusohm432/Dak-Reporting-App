@@ -33,8 +33,8 @@ import {
   getReports,
   type ReportSummary,
 } from "../../database/reportRepository";
+import { exportReportsWithBackend } from "../../services/backendExcelExport";
 import {
-  exportReportsToExcel,
   exportReportsToPdf,
 } from "../../services/reportExport";
 
@@ -122,7 +122,7 @@ export default function ReportsScreen() {
       if (!fullReport) throw new Error("This report could not be found.");
 
       if (format === "excel") {
-        await exportReportsToExcel([fullReport], report.reportingPeriod);
+        await exportReportsWithBackend([fullReport], report.reportingPeriod);
       } else {
         await exportReportsToPdf([fullReport], report.reportingPeriod);
       }
