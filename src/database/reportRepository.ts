@@ -144,6 +144,21 @@ export async function getReports(
 }
 
 /**
+ * Returns complete saved reports, including their form answers.
+ */
+export async function getAllReports(
+  db: SQLiteDatabase
+): Promise<DakReport[]> {
+  const rows = await db.getAllAsync<{ data_json: string }>(
+    `SELECT data_json
+     FROM reports
+     ORDER BY updated_at DESC;`
+  );
+
+  return rows.map((row) => deserializeReport(row.data_json));
+}
+
+/**
  * Loads the complete report, including its form answers.
  */
 export async function getReportById(

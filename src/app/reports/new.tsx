@@ -5,6 +5,7 @@ import {
   FocusEvent,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -48,8 +49,7 @@ export default function NewReportScreen() {
   const [block, setBlock] = useState("");
   const [coordinatorName, setCoordinatorName] = useState("");
 
-  const [previewReport, setPreviewReport] =
-    useState<DakReport | null>(null);
+  const [savedDraft, setSavedDraft] = useState<DakReport | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const focusedInputTarget = useRef<number | null>(null);
   const keyboardVisible = useRef(false);
@@ -138,26 +138,7 @@ export default function NewReportScreen() {
       );
 
       await saveReport(db, draft);
-
-      setPreviewReport(draft);
-
-      Alert.alert(
-        "Report saved",
-        `${monthLabel}\n` +
-        `${reportingPeriod}\n\n` +
-        `Block: ${draft.block}\n\n` +
-        "Your draft is saved on this device.",
-        [
-          {
-            text: "Continue",
-            style: "cancel",
-          },
-          {
-            text: "View saved reports",
-            onPress: () => router.push("/reports"),
-          },
-        ]
-      );
+      setSavedDraft(draft);
     } catch (error) {
       console.error("Failed to save report:", error);
 
@@ -199,11 +180,9 @@ export default function NewReportScreen() {
             endDate={periodEnd}
             onStartDateChange={(newDate) => {
               setPeriodStart(newDate);
-              setPreviewReport(null);
             }}
             onEndDateChange={(newDate) => {
               setPeriodEnd(newDate);
-              setPreviewReport(null);
             }}
           />
 
@@ -273,38 +252,70 @@ export default function NewReportScreen() {
           </Text>
         </Pressable>
 
-        {previewReport && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>
-              Draft preview
-            </Text>
-
-            <Text style={styles.previewText}>
-              Month: {previewReport.reportingMonth}
-            </Text>
-
-            <Text style={styles.previewText}>
-              Period: {previewReport.reportingPeriod}
-            </Text>
-
-            <Text style={styles.previewText}>
-              District: {previewReport.district}
-            </Text>
-
-            <Text style={styles.previewText}>
-              Block: {previewReport.block}
-            </Text>
-
-            <Text style={styles.previewText}>
-              Coordinator: {previewReport.coordinatorName}
-            </Text>
-
-            <Text style={styles.draftStatus}>
-              Status: {previewReport.status}
-            </Text>
-          </View>
-        )}
       </ScrollView>
+
+      <Modal
+        visible={savedDraft !== null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setSavedDraft(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.savedDialog}>
+            <View style={styles.savedMark}>
+              <Text style={styles.savedMarkText}>✓</Text>
+            </View>
+
+            <Text style={styles.savedEyebrow}>SAVED ON THIS DEVICE</Text>
+            <Text style={styles.savedTitle}>Report created</Text>
+            <Text style={styles.savedDescription}>
+              Your draft is ready to fill in or revisit later.
+            </Text>
+
+            <View style={styles.savedDetails}>
+              <View style={styles.savedDetailRow}>
+                <Text style={styles.savedDetailLabel}>Block</Text>
+                <Text style={styles.savedDetailValue} numberOfLines={2}>
+                  {savedDraft?.block}
+                </Text>
+              </View>
+              <View style={styles.savedDetailDivider} />
+              <View style={styles.savedDetailRow}>
+                <Text style={styles.savedDetailLabel}>Period</Text>
+                <Text style={styles.savedDetailValue} numberOfLines={2}>
+                  {savedDraft?.reportingPeriod}
+                </Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.continueButton, pressed && styles.buttonPressed]}
+              onPress={() => {
+                if (!savedDraft) return;
+                const draftId = savedDraft.id;
+                setSavedDraft(null);
+                router.push({
+                  pathname: "/reports/[id]",
+                  params: { id: draftId },
+                });
+              }}
+            >
+              <Text style={styles.continueButtonText}>Continue editing</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.savedReportsButton, pressed && styles.buttonPressed]}
+              onPress={() => {
+                setSavedDraft(null);
+                router.push("/reports");
+              }}
+            >
+              <Text style={styles.savedReportsButtonText}>View saved reports</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -397,14 +408,113 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  previewText: {
-    color: "#374151",
-    marginBottom: 8,
-    fontSize: 14,
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+    backgroundColor: "rgba(15, 23, 42, 0.48)",
   },
-  draftStatus: {
-    marginTop: 8,
-    color: "#047857",
+  savedDialog: {
+    width: "100%",
+    maxWidth: 420,
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+  },
+  savedMark: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#DCFCE7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  savedMarkText: {
+    color: "#15803D",
+    fontSize: 26,
+    fontWeight: "700",
+  },
+  savedEyebrow: {
+    color: "#15803D",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+  },
+  savedTitle: {
+    color: "#111827",
+    fontSize: 23,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 6,
+  },
+  savedDescription: {
+    color: "#64748B",
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    marginTop: 7,
+  },
+  savedDetails: {
+    width: "100%",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    marginTop: 20,
+    marginBottom: 18,
+  },
+  savedDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 12,
+  },
+  savedDetailLabel: {
+    color: "#64748B",
+    fontSize: 13,
+  },
+  savedDetailValue: {
+    flex: 1,
+    color: "#0F172A",
+    fontSize: 13,
     fontWeight: "600",
+    textAlign: "right",
+  },
+  savedDetailDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#E2E8F0",
+  },
+  continueButton: {
+    width: "100%",
+    minHeight: 48,
+    backgroundColor: "#1D4ED8",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  continueButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  savedReportsButton: {
+    width: "100%",
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  savedReportsButtonText: {
+    color: "#475569",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  buttonPressed: {
+    opacity: 0.72,
   },
 });

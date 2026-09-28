@@ -207,6 +207,26 @@ export default function ReportsScreen() {
         </Text>
       </View>
 
+      <Pressable
+        onPress={() => router.push("/reports/export")}
+        style={{
+          padding: 14,
+          borderRadius: 10,
+          backgroundColor: "#1D4ED8",
+          marginVertical: 8,
+        }}
+      >
+        <Text
+          style={{
+            color: "#FFFFFF",
+            fontWeight: "700",
+            textAlign: "center",
+          }}
+        >
+          Excel / PDF Export
+        </Text>
+      </Pressable>
+
       {loading ? (
         <ActivityIndicator
           size="large"

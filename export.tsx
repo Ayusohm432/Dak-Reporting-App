@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { Picker } from "@react-native-picker/picker";
 import type { DakReport } from "../../models/DakReport";
-import { getAllReports } from "../../database/reportRepository";
+import { getReports } from "../../database/reportRepository";
 import { exportReportsToExcel, exportReportsToPdf } from "../../services/reportExport";
 
 export default function ExportReportsScreen() {
@@ -18,7 +18,7 @@ export default function ExportReportsScreen() {
     let mounted = true;
     (async () => {
       try {
-        const all = await getAllReports(db);
+        const all = await getReports(db);
         if (!mounted) return;
         setReports(all);
         const periods = Array.from(new Set(all.map((r) => r.reportingPeriod).filter(Boolean)));
