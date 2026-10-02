@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, TextInput, View, StyleSheet } from "react-native";
+import { Text, TextInput, View, StyleSheet, type FocusEvent } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import type { ReportField } from "../config/reportFields";
 import DatePickerField from "./DatePickerField";
@@ -8,6 +8,7 @@ type Props = {
   field: ReportField;
   value: unknown;
   onChange: (value: unknown) => void;
+  onFocus?: (event: FocusEvent) => void;
 };
 
 function asText(value: unknown): string {
@@ -17,7 +18,7 @@ function asText(value: unknown): string {
   return "";
 }
 
-export default function ReportFormField({ field, value, onChange }: Props) {
+export default function ReportFormField({ field, value, onChange, onFocus }: Props) {
   const textValue = asText(value);
 
   if (field.type === "date") {
@@ -76,6 +77,7 @@ export default function ReportFormField({ field, value, onChange }: Props) {
         onChangeText={(text) => onChange(field.type === "number" ? (text === "" ? "" : text) : text)}
         placeholder={field.placeholder ?? (field.type === "number" ? "0" : "यहाँ लिखें")}
         keyboardType={field.type === "number" ? "numeric" : "default"}
+        onFocus={onFocus}
         multiline={field.type === "textarea"}
         textAlignVertical={field.type === "textarea" ? "top" : "center"}
         style={[styles.input, field.type === "textarea" && styles.textarea]}

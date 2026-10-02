@@ -1,9 +1,11 @@
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
   Alert,
+  FocusEvent,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -106,8 +108,45 @@ export default function ReportEditorScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const focusedInputTarget = useRef<number | null>(null);
+  const keyboardVisible = useRef(false);
 
   const section = REPORT_SECTIONS[sectionIndex];
+
+  function scrollToFocusedInput() {
+    const target = focusedInputTarget.current;
+    if (target === null || Platform.OS === "web") return;
+
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollResponderScrollNativeHandleToKeyboard(
+        target,
+        24,
+        true
+      );
+    });
+  }
+
+  function handleInputFocus(event: FocusEvent) {
+    focusedInputTarget.current = event.nativeEvent.target;
+    if (keyboardVisible.current) scrollToFocusedInput();
+  }
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+      keyboardVisible.current = true;
+      scrollToFocusedInput();
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      keyboardVisible.current = false;
+      focusedInputTarget.current = null;
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const loadReport = useCallback(async () => {
     if (!id) {
@@ -369,6 +408,7 @@ export default function ReportEditorScreen() {
           <ReportFormField
             field={field}
             value={value}
+            onFocus={handleInputFocus}
             onChange={(nextValue) =>
               updateField(field.id, nextValue)
             }
@@ -457,7 +497,7 @@ export default function ReportEditorScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.topBar}>
         <Text style={styles.topBarTitle}>
@@ -491,9 +531,12 @@ export default function ReportEditorScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+        scrollsChildToFocus
       >
         <Text style={styles.title}>{section.title}</Text>
 
