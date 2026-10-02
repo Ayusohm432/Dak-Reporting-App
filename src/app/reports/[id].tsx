@@ -362,7 +362,9 @@ export default function ReportEditorScreen() {
       return (
         <React.Fragment key={field.id}>
           {field.sectionHeader ? (
-            <Text style={styles.subsectionTitle}>{field.sectionHeader}</Text>
+            <View style={styles.subsectionHeader}>
+              <Text style={styles.subsectionTitle}>{field.sectionHeader}</Text>
+            </View>
           ) : null}
           <ReportFormField
             field={field}
@@ -636,11 +638,19 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: 18,
   },
+  subsectionHeader: {
+    backgroundColor: "#EFF6FF",
+    borderLeftWidth: 4,
+    borderLeftColor: "#2563EB",
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
+  },
   subsectionTitle: {
-    color: "#111827",
-    fontSize: 16,
+    color: "#1D4ED8",
+    fontSize: 15,
     fontWeight: "700",
-    marginBottom: 10,
   },
   metadataCard: {
     backgroundColor: "#EFF6FF",
