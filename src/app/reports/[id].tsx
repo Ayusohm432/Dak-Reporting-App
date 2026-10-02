@@ -31,6 +31,8 @@ import {
   getReportById,
   saveReport,
 } from "../../database/reportRepository";
+import { exportReportsWithBackend } from "../../services/backendExcelExport";
+import { exportReportsToPdf } from "../../services/reportExport";
 
 import {
   updateDraftReport,
@@ -101,6 +103,7 @@ export default function ReportEditorScreen() {
   const [sectionIndex, setSectionIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const section = REPORT_SECTIONS[sectionIndex];
 
@@ -260,8 +263,9 @@ export default function ReportEditorScreen() {
         "Your answers are saved as a draft. Review the report before marking it complete.",
         [
           {
-            text: "Stay here",
+            text: "Export",
             style: "cancel",
+            onPress: chooseExportFormat,
           },
           {
             text: "Saved Reports",
@@ -299,6 +303,40 @@ export default function ReportEditorScreen() {
         ]
       );
     }
+  }
+
+  async function exportCurrentReport(format: "excel" | "pdf") {
+    if (!report || exporting) return;
+
+    setExporting(true);
+
+    try {
+      if (format === "excel") {
+        await exportReportsWithBackend([report], report.reportingPeriod);
+      } else {
+        await exportReportsToPdf([report], report.reportingPeriod);
+      }
+    } catch (error) {
+      console.error("Report export failed:", error);
+      Alert.alert(
+        "Export failed",
+        error instanceof Error ? error.message : "The report could not be exported."
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function chooseExportFormat() {
+    Alert.alert(
+      "Choose export format",
+      `${report?.block} · ${report?.reportingPeriod}`,
+      [
+        { text: "Excel", onPress: () => void exportCurrentReport("excel") },
+        { text: "PDF", onPress: () => void exportCurrentReport("pdf") },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
   }
 
   function renderSectionFields() {

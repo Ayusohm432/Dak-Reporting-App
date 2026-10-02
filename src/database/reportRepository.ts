@@ -58,6 +58,30 @@ export async function saveReport(
 }
 
 /**
+ * Finds an existing report for the same district, block, and date range.
+ */
+export async function findReportForLocationAndPeriod(
+  db: SQLiteDatabase,
+  reportingPeriod: string,
+  district: string,
+  block: string
+): Promise<string | null> {
+  const row = await db.getFirstAsync<{ id: string }>(
+    `SELECT id
+     FROM reports
+     WHERE reporting_period = ?
+       AND lower(trim(district)) = lower(trim(?))
+       AND lower(trim(block)) = lower(trim(?))
+     LIMIT 1;`,
+    reportingPeriod,
+    district,
+    block
+  );
+
+  return row?.id ?? null;
+}
+
+/**
  * Lightweight report information for the history screen.
  */
 export interface ReportSummary {

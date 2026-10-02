@@ -2,6 +2,7 @@ import React from "react";
 import { Text, TextInput, View, StyleSheet } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import type { ReportField } from "../config/reportFields";
+import DatePickerField from "./DatePickerField";
 
 type Props = {
   field: ReportField;
@@ -18,6 +19,16 @@ function asText(value: unknown): string {
 
 export default function ReportFormField({ field, value, onChange }: Props) {
   const textValue = asText(value);
+
+  if (field.type === "date") {
+    return (
+      <DatePickerField
+        label={field.label}
+        value={textValue}
+        onChange={onChange}
+      />
+    );
+  }
 
   if (field.type === "select") {
     return (

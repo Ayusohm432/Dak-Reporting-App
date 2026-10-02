@@ -3,7 +3,7 @@
  * Labels follow the Hindi column headings in DAK-Reporting Format(Blank).xlsx.
  * IDs are stable app keys; Phase 10 Excel export will map these IDs to columns.
  */
-export type FieldType = "text" | "number" | "textarea" | "yesNo" | "select" | "multiSelect";
+export type FieldType = "text" | "number" | "textarea" | "date" | "yesNo" | "select" | "multiSelect";
 
 export interface ReportField {
   id: string;
@@ -51,7 +51,7 @@ export const REPORT_SECTIONS: ReportSection[] = [
     description: "समीक्षात्मक बैठक से संबंधित जानकारी भरें।",
     fields: [
       { id: "reviewMeetingHeld", label: "DAK का रिव्यु मीटिंग (समीक्षात्मक बैठक)", type: "select", options: ["0", "1"] },
-      { id: "reviewMeetingDate", label: "तिथि", type: "text", placeholder: "DD/MM/YYYY" },
+      { id: "reviewMeetingDate", label: "तिथि", type: "date", placeholder: "DD/MM/YYYY" },
       { id: "reviewMeetingNumber", label: "इस समीक्षात्मक बैठक की संख्या क्या है? (पहली बार के लिए 1, दूसरी बार के लिए 2...)", type: "number" },
       { id: "meetingChairperson", label: "किसकी अध्यक्षता में ये समीक्षात्मक बैठक हुआ है? (लीडर, CC, RC-C3, BPM, DAK-C, अन्य)", type: "multiSelect", options: ["लीडर", "CC", "RC-C3", "BPM", "DAK-C", "अन्य"] },
       { id: "coordinatorAttended", label: "क्या DAK कोऑर्डिनेटर ने इस समीक्षात्मक बैठक में भाग लिया?", type: "select", options: yesNo },
@@ -97,7 +97,7 @@ export const REPORT_SECTIONS: ReportSection[] = [
     description: "BLGF बैठक हुई हो तो तारीख और बैठक संख्या दर्ज करें।",
     fields: [
       { id: "blgfMeetingHeld", label: "BLGF बैठक", type: "select", options: yesNo },
-      { id: "blgfMeetingDate", label: "अगर हाँ तो तारीख बताइए", type: "text", placeholder: "DD/MM/YYYY", visibleWhen: { fieldId: "blgfMeetingHeld", equals: "Yes" } },
+      { id: "blgfMeetingDate", label: "अगर हाँ तो तारीख बताइए", type: "date", placeholder: "DD/MM/YYYY", visibleWhen: { fieldId: "blgfMeetingHeld", equals: "Yes" } },
       { id: "blgfMeetingNumber", label: "इस BLGF बैठक की संख्या क्या है?", type: "number", visibleWhen: { fieldId: "blgfMeetingHeld", equals: "Yes" } },
     ],
   },

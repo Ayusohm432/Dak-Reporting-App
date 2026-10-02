@@ -55,7 +55,6 @@ export default function ReportingMonthPicker({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Reporting month</Text>
       <View style={styles.pickerRow}>
         <View style={styles.monthPicker}>
           <Text style={styles.label}>Month</Text>
@@ -96,32 +95,32 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   heading: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 8,
+    color: "#0F766E",
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 9,
   },
   pickerRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
   },
   monthPicker: {
     flex: 2,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
     borderRadius: 8,
     overflow: "hidden",
+    backgroundColor: "#F0FDFA",
   },
   yearPicker: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
     borderRadius: 8,
     overflow: "hidden",
+    backgroundColor: "#F8FAFC",
   },
   label: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginLeft: 10,
-    marginTop: 8,
+    fontSize: 11,
+    color: "#475569",
+    fontWeight: "600",
+    marginLeft: 12,
+    marginTop: 7,
   },
 });

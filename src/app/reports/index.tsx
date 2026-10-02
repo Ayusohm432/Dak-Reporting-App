@@ -2,11 +2,13 @@
 import React, {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
 import {
   ActivityIndicator,
+  AppState,
   Alert,
   FlatList,
   Modal,
@@ -41,9 +43,8 @@ import {
 export default function ReportsScreen() {
   const db = useSQLiteContext();
 
-  const [month, setMonth] = useState(
-    getCurrentReportingMonth()
-  );
+  const [month, setMonth] = useState(() => getCurrentReportingMonth());
+  const followsCurrentMonth = useRef(true);
 
   const [showAllMonths, setShowAllMonths] = useState(false);
 
@@ -78,6 +79,21 @@ export default function ReportsScreen() {
   useEffect(() => {
     void loadReports();
   }, [loadReports]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active" && followsCurrentMonth.current) {
+        setMonth(getCurrentReportingMonth());
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  function handleMonthChange(nextMonth: string) {
+    followsCurrentMonth.current = nextMonth === getCurrentReportingMonth();
+    setMonth(nextMonth);
+  }
 
   function confirmDelete(report: ReportSummary) {
     Alert.alert(
@@ -255,7 +271,7 @@ export default function ReportsScreen() {
         <Text style={styles.filterTitle}>Browse reports</Text>
         <ReportingMonthPicker
           value={month}
-          onChange={setMonth}
+          onChange={handleMonthChange}
         />
 
         <Pressable
@@ -268,14 +284,6 @@ export default function ReportsScreen() {
               : "Show all months"}
           </Text>
         </Pressable>
-
-        <Text style={styles.resultCount}>
-          {showAllMonths
-            ? "All saved reports"
-            : formatReportingMonth(month)}
-          {" · "}
-          {reports.length} report(s)
-        </Text>
       </View>
 
       {loading ? (
@@ -544,12 +552,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   detailGroup: {
-    gap: 2,
+    gap: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   detailLabel: {
     color: "#64748B",
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: "bold",
   },
   detailValue: {
     color: "#1E293B",

@@ -138,14 +138,18 @@ export function getReportingPeriodFromKey(
 }
 
 /**
- * Returns the default 26th-to-25th reporting range for the current month.
+ * Returns the range from the most recent 26th through today.
  */
 export function getDefaultReportingPeriodDates(
   now: Date = new Date()
 ): { startDate: Date; endDate: Date } {
+  const startMonth = now.getDate() >= 26
+    ? now.getMonth()
+    : now.getMonth() - 1;
+
   return {
-    startDate: new Date(now.getFullYear(), now.getMonth() - 1, 26),
-    endDate: new Date(now.getFullYear(), now.getMonth(), 25),
+    startDate: new Date(now.getFullYear(), startMonth, 26),
+    endDate: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
   };
 }
 

@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import DatePickerField from "./DatePickerField";
 
 export type RepeatableEntry = {
   name: string;
@@ -66,12 +67,10 @@ export default function RepeatableEntryEditor({
             placeholder="पंचायत का नाम"
             style={styles.input}
           />
-          <Text style={styles.label}>तिथि</Text>
-          <TextInput
+          <DatePickerField
+            label="तिथि"
             value={entry.date}
-            onChangeText={(date) => updateEntry(index, { date })}
-            placeholder="DD/MM/YYYY"
-            style={styles.input}
+            onChange={(date) => updateEntry(index, { date })}
           />
           {showRemarks && (
             <>

@@ -1,6 +1,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppState,
   Alert,
   FocusEvent,
   Keyboard,
@@ -33,7 +34,10 @@ import {
 import { useSQLiteContext } from "expo-sqlite";
 import { router } from "expo-router";
 
-import { saveReport } from "../../database/reportRepository";
+import {
+  findReportForLocationAndPeriod,
+  saveReport,
+} from "../../database/reportRepository";
 
 export default function NewReportScreen() {
 
@@ -44,6 +48,8 @@ export default function NewReportScreen() {
   const [initialPeriod] = useState(getDefaultReportingPeriodDates);
   const [periodStart, setPeriodStart] = useState(initialPeriod.startDate);
   const [periodEnd, setPeriodEnd] = useState(initialPeriod.endDate);
+  const followsCurrentStartDate = useRef(true);
+  const followsCurrentEndDate = useRef(true);
 
   const [district, setDistrict] = useState("");
   const [block, setBlock] = useState("");
@@ -105,6 +111,22 @@ export default function NewReportScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+
+      const currentPeriod = getDefaultReportingPeriodDates();
+      if (followsCurrentStartDate.current) {
+        setPeriodStart(currentPeriod.startDate);
+      }
+      if (followsCurrentEndDate.current) {
+        setPeriodEnd(currentPeriod.endDate);
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
 
   async function handleCreateDraft() {
     if (
@@ -126,6 +148,31 @@ export default function NewReportScreen() {
     setIsSaving(true);
 
     try {
+      const existingReportId = await findReportForLocationAndPeriod(
+        db,
+        reportingPeriod,
+        district,
+        block
+      );
+
+      if (existingReportId) {
+        Alert.alert(
+          "Report already exists",
+          "A report for this district, block, and reporting period already exists.",
+          [
+            {
+              text: "Open report",
+              onPress: () => router.replace({
+                pathname: "/reports/[id]",
+                params: { id: existingReportId },
+              }),
+            },
+            { text: "Cancel", style: "cancel" },
+          ]
+        );
+        return;
+      }
+
       const draft = createDraftReport(
         {
           reportingMonth,
@@ -179,9 +226,11 @@ export default function NewReportScreen() {
             startDate={periodStart}
             endDate={periodEnd}
             onStartDateChange={(newDate) => {
+              followsCurrentStartDate.current = false;
               setPeriodStart(newDate);
             }}
             onEndDateChange={(newDate) => {
+              followsCurrentEndDate.current = false;
               setPeriodEnd(newDate);
             }}
           />
