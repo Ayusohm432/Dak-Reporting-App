@@ -8,11 +8,14 @@ type BackendExportResponse = {
   contentBase64: string;
 };
 
+type ExportKind = "excel" | "pdf";
+
 const API_BASE_URL = process.env.EXPO_PUBLIC_DAK_API_URL?.replace(/\/+$/, "");
 
-export async function exportReportsWithBackend(
+async function requestBackendExport(
   reports: DakReport[],
-  reportingPeriod: string
+  reportingPeriod: string,
+  kind: ExportKind
 ): Promise<string> {
   if (!API_BASE_URL) {
     throw new Error(
@@ -24,16 +27,19 @@ export async function exportReportsWithBackend(
     throw new Error("इस प्रतिवेदन अवधि के लिए कोई रिपोर्ट नहीं मिली।");
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/reports/export`, {
+  const endpoint = kind === "pdf" ? "export-pdf" : "export";
+  const expectedType =
+    kind === "pdf"
+      ? "application/pdf"
+      : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  const response = await fetch(`${API_BASE_URL}/api/reports/${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({
-      reportingPeriod,
-      reports,
-    }),
+    body: JSON.stringify({ reportingPeriod, reports }),
   });
 
   let responseBody: any;
@@ -41,7 +47,7 @@ export async function exportReportsWithBackend(
     responseBody = await response.json();
   } catch {
     throw new Error(
-      `Excel server returned an invalid response (HTTP ${response.status}).`
+      `${kind.toUpperCase()} server returned an invalid response (HTTP ${response.status}).`
     );
   }
 
@@ -49,14 +55,15 @@ export async function exportReportsWithBackend(
     const detail =
       typeof responseBody?.detail === "string"
         ? responseBody.detail
-        : `Excel export failed (HTTP ${response.status}).`;
+        : `${kind.toUpperCase()} export failed (HTTP ${response.status}).`;
     throw new Error(detail);
   }
 
   const result = responseBody as BackendExportResponse;
-
   if (!result.contentBase64 || !result.filename) {
-    throw new Error("The server response did not contain an Excel file.");
+    throw new Error(
+      `The server response did not contain a ${kind.toUpperCase()} file.`
+    );
   }
 
   const directory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
@@ -64,29 +71,46 @@ export async function exportReportsWithBackend(
     throw new Error("This device does not provide a writable file directory.");
   }
 
-  const outputUri = `${directory}${result.filename}`;
-
+  const outputFilename =
+    kind === "pdf"
+      ? result.filename.replace(/\.pdf$/i, `_${Date.now()}.pdf`)
+      : result.filename;
+  const outputUri = `${directory}${outputFilename}`;
   await FileSystem.writeAsStringAsync(outputUri, result.contentBase64, {
     encoding: FileSystem.EncodingType.Base64,
   });
 
   const fileInfo = await FileSystem.getInfoAsync(outputUri);
   if (!fileInfo.exists) {
-    throw new Error("The Excel file could not be saved on this device.");
+    throw new Error(
+      `The ${kind.toUpperCase()} file could not be saved on this device.`
+    );
   }
 
   const canShare = await Sharing.isAvailableAsync();
-  if (!canShare) {
-    return outputUri;
-  }
+  if (!canShare) return outputUri;
 
   await Sharing.shareAsync(outputUri, {
-    mimeType:
-      result.mimeType ||
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    dialogTitle: "DAK Excel रिपोर्ट शेयर करें",
-    UTI: "org.openxmlformats.spreadsheetml.sheet",
+    mimeType: result.mimeType || expectedType,
+    dialogTitle:
+      kind === "pdf" ? "DAK PDF रिपोर्ट शेयर करें" : "DAK Excel रिपोर्ट शेयर करें",
+    UTI:
+      kind === "pdf" ? "com.adobe.pdf" : "org.openxmlformats.spreadsheetml.sheet",
   });
 
   return outputUri;
+}
+
+export function exportReportsWithBackend(
+  reports: DakReport[],
+  reportingPeriod: string
+): Promise<string> {
+  return requestBackendExport(reports, reportingPeriod, "excel");
+}
+
+export function exportReportsPdfWithBackend(
+  reports: DakReport[],
+  reportingPeriod: string
+): Promise<string> {
+  return requestBackendExport(reports, reportingPeriod, "pdf");
 }

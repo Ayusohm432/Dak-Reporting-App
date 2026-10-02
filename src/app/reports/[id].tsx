@@ -31,8 +31,10 @@ import {
   getReportById,
   saveReport,
 } from "../../database/reportRepository";
-import { exportReportsWithBackend } from "../../services/backendExcelExport";
-import { exportReportsToPdf } from "../../services/reportExport";
+import {
+  exportReportsWithBackend,
+  exportReportsPdfWithBackend as exportReportsToPdf,
+} from "../../services/backendExcelExport";
 
 import {
   updateDraftReport,
@@ -359,6 +361,9 @@ export default function ReportEditorScreen() {
 
       return (
         <React.Fragment key={field.id}>
+          {field.sectionHeader ? (
+            <Text style={styles.subsectionTitle}>{field.sectionHeader}</Text>
+          ) : null}
           <ReportFormField
             field={field}
             value={value}
@@ -630,6 +635,12 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     lineHeight: 21,
     marginBottom: 18,
+  },
+  subsectionTitle: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 10,
   },
   metadataCard: {
     backgroundColor: "#EFF6FF",

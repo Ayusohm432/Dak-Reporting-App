@@ -5,7 +5,10 @@ import { useSQLiteContext } from "expo-sqlite";
 import { Picker } from "@react-native-picker/picker";
 import type { DakReport } from "./src/models/DakReport";
 import { getAllReports } from "./src/database/reportRepository";
-import { exportReportsToExcel, exportReportsToPdf } from "./src/services/reportExport";
+import {
+  exportReportsWithBackend as exportReportsToExcel,
+  exportReportsPdfWithBackend as exportReportsToPdf,
+} from "./src/services/backendExcelExport";
 
 export default function ExportReportsScreen() {
   const db = useSQLiteContext();

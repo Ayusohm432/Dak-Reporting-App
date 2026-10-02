@@ -35,10 +35,10 @@ import {
   getReports,
   type ReportSummary,
 } from "../../database/reportRepository";
-import { exportReportsWithBackend } from "../../services/backendExcelExport";
 import {
-  exportReportsToPdf,
-} from "../../services/reportExport";
+  exportReportsWithBackend,
+  exportReportsPdfWithBackend as exportReportsToPdf,
+} from "../../services/backendExcelExport";
 
 export default function ReportsScreen() {
   const db = useSQLiteContext();

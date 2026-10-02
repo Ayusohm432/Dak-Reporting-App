@@ -12,6 +12,7 @@ export interface ReportField {
   required?: boolean;
   options?: string[];
   placeholder?: string;
+  sectionHeader?: string;
   visibleWhen?: { fieldId: string; equals: string };
 }
 
@@ -33,7 +34,7 @@ export const REPORT_SECTIONS: ReportSection[] = [
       { id: "district", label: "ज़िला", type: "text", required: true },
       { id: "block", label: "प्रखंड", type: "text", required: true },
       { id: "coordinatorName", label: "DAK कोऑर्डिनेटर का नाम", type: "text", required: true },
-      { id: "dakCasesReceived", label: "DAK पर आये मामलों की सं", type: "number" },
+      { id: "dakCasesReceived", label: "26 से 25 तक आये घरेलु हिंसा के मामलों  की सं ?", type: "number", sectionHeader: "DAK पर आये मामलों की सं" },
       { id: "dakCasesResolved", label: "इन मामलों में से कितने मामलों को सुलझा लिया गया ?", type: "number" },
       { id: "socialRightsCases", label: "26 से 25 तक आये सामाजिक अधिकार के मामलों की संख्या ?", type: "number" },
       { id: "socialRightsResolved", label: "इन मामलों में से कितने मामलों को सुलझाया गया ?", type: "number" },
