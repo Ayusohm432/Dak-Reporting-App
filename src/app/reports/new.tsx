@@ -15,9 +15,11 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SymbolView } from "expo-symbols";
 import * as Crypto from "expo-crypto";
 
 import ReportingPeriodPicker from "../../components/ReportingPeriodPicker";
+import BrandHeader from "../../components/brand-header";
 
 import {
   formatReportingPeriod,
@@ -54,6 +56,7 @@ export default function NewReportScreen() {
   const [district, setDistrict] = useState("");
   const [block, setBlock] = useState("");
   const [coordinatorName, setCoordinatorName] = useState("");
+  const [focusedField, setFocusedField] = useState<"district" | "block" | "coordinator" | null>(null);
 
   const [savedDraft, setSavedDraft] = useState<DakReport | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -75,6 +78,13 @@ export default function NewReportScreen() {
     () => formatReportingMonth(reportingMonth),
     [reportingMonth]
   );
+  const readyItems = [
+    isPeriodValid,
+    Boolean(district.trim()),
+    Boolean(block.trim()),
+    Boolean(coordinatorName.trim()),
+  ].filter(Boolean).length;
+  const setupProgress = readyItems / 4;
 
   function scrollToFocusedInput() {
     const target = focusedInputTarget.current;
@@ -204,6 +214,9 @@ export default function NewReportScreen() {
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
+      <View style={styles.fixedHeader}>
+        <BrandHeader />
+      </View>
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
@@ -212,16 +225,51 @@ export default function NewReportScreen() {
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         scrollsChildToFocus
       >
-        <Text style={styles.title}>
-          Create DAK Report
-        </Text>
+        <View style={styles.heading}>
+          <View style={styles.titleRow}>
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [styles.backButton, pressed && styles.buttonPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <SymbolView name={{ ios: "arrow.left", android: "arrow_back", web: "arrow_back" }} size={20} tintColor="#24634F" />
+            </Pressable>
+            <Text style={styles.title}>Create a DAK report</Text>
+          </View>
+          <Text style={styles.description}>
+            Set the reporting window and add block details to start a draft.
+          </Text>
+        </View>
 
-        <Text style={styles.description}>
-          Select the reporting month and enter the basic
-          information for this block's report.
-        </Text>
+        <View style={styles.progressCard}>
+          <View style={styles.progressHeading}>
+            <View>
+              <Text style={styles.progressTitle}>Report setup</Text>
+              <Text style={styles.progressCaption}>{readyItems} of 4 details ready</Text>
+            </View>
+            <Text style={styles.progressPercent}>{Math.round(setupProgress * 100)}%</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${setupProgress * 100}%` }]} />
+          </View>
+          <Text style={styles.progressHint}>Choose a period, then add district, block, and coordinator.</Text>
+        </View>
 
         <View style={styles.card}>
+          <View style={styles.sectionHeading}>
+            <View style={[styles.sectionIcon, styles.periodIcon]}>
+              <SymbolView name={{ ios: "calendar", android: "calendar_month", web: "calendar_month" }} size={17} tintColor="#24634F" />
+            </View>
+            <View style={styles.sectionHeadingCopy}>
+              <Text style={styles.sectionTitle}>Reporting period</Text>
+              <Text style={styles.sectionCaption}>Select the dates this report covers.</Text>
+            </View>
+            <View style={[styles.stepBadge, isPeriodValid && styles.stepBadgeReady]}>
+              <Text style={[styles.stepBadgeText, isPeriodValid && styles.stepBadgeTextReady]}>{isPeriodValid ? "Ready" : "Check"}</Text>
+            </View>
+          </View>
+
           <ReportingPeriodPicker
             startDate={periodStart}
             endDate={periodEnd}
@@ -236,6 +284,7 @@ export default function NewReportScreen() {
           />
 
           <View style={[styles.periodBox, !isPeriodValid && styles.invalidPeriodBox]}>
+            <SymbolView name={{ ios: "calendar.badge.clock", android: "event", web: "event" }} size={17} tintColor={isPeriodValid ? "#24634F" : "#B42318"} />
             <Text style={styles.periodValue}>
               {isPeriodValid ? reportingPeriod : "Choose an end date on or after the start date"}
             </Text>
@@ -244,9 +293,18 @@ export default function NewReportScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            Basic information
-          </Text>
+          <View style={styles.sectionHeading}>
+            <View style={[styles.sectionIcon, styles.detailsIcon]}>
+              <SymbolView name={{ ios: "person.text.rectangle", android: "badge", web: "badge" }} size={17} tintColor="#D86E43" />
+            </View>
+            <View style={styles.sectionHeadingCopy}>
+              <Text style={styles.sectionTitle}>Block details</Text>
+              <Text style={styles.sectionCaption}>Required information for this report.</Text>
+            </View>
+            <View style={[styles.stepBadge, readyItems === 4 && styles.stepBadgeReady]}>
+              <Text style={[styles.stepBadgeText, readyItems === 4 && styles.stepBadgeTextReady]}>{readyItems === 4 ? "Ready" : "3 fields"}</Text>
+            </View>
+          </View>
 
           <Text style={styles.fieldLabel}>
             District *
@@ -254,11 +312,13 @@ export default function NewReportScreen() {
 
           <TextInput
             value={district}
-            onChangeText={setDistrict}
+            onChangeText={(value) => setDistrict(value)}
             placeholder="Enter district name"
-            style={styles.input}
+            style={[styles.input, focusedField === "district" && styles.inputFocused]}
             autoCapitalize="words"
-            onFocus={handleInputFocus}
+            onFocus={(event) => { setFocusedField("district"); handleInputFocus(event); }}
+            onBlur={() => setFocusedField(null)}
+            returnKeyType="next"
           />
 
           <Text style={styles.fieldLabel}>
@@ -267,11 +327,13 @@ export default function NewReportScreen() {
 
           <TextInput
             value={block}
-            onChangeText={setBlock}
+            onChangeText={(value) => setBlock(value)}
             placeholder="Enter block name"
-            style={styles.input}
+            style={[styles.input, focusedField === "block" && styles.inputFocused]}
             autoCapitalize="words"
-            onFocus={handleInputFocus}
+            onFocus={(event) => { setFocusedField("block"); handleInputFocus(event); }}
+            onBlur={() => setFocusedField(null)}
+            returnKeyType="next"
           />
 
           <Text style={styles.fieldLabel}>
@@ -280,26 +342,27 @@ export default function NewReportScreen() {
 
           <TextInput
             value={coordinatorName}
-            onChangeText={setCoordinatorName}
+            onChangeText={(value) => setCoordinatorName(value)}
             placeholder="Enter coordinator name"
-            style={styles.input}
+            style={[styles.input, focusedField === "coordinator" && styles.inputFocused]}
             autoCapitalize="words"
-            onFocus={handleInputFocus}
+            onFocus={(event) => { setFocusedField("coordinator"); handleInputFocus(event); }}
+            onBlur={() => setFocusedField(null)}
+            returnKeyType="done"
           />
         </View>
 
         <Pressable
-          style={[
-            styles.primaryButton,
-            isSaving && { opacity: 0.6 },
-          ]}
+          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed, isSaving && styles.buttonDisabled]}
           onPress={handleCreateDraft}
           disabled={isSaving}
         >
           <Text style={styles.primaryButtonText}>
-            {isSaving ? "Saving..." : "Save draft"}
+            {isSaving ? "Saving report..." : "Save report draft"}
           </Text>
+          {!isSaving ? <SymbolView name={{ ios: "arrow.right", android: "arrow_forward", web: "arrow_forward" }} size={17} tintColor="#FFFFFF" /> : null}
         </Pressable>
+        <Text style={styles.saveHint}>You can complete and submit the report after filling it in.</Text>
 
       </ScrollView>
 
@@ -357,7 +420,7 @@ export default function NewReportScreen() {
               style={({ pressed }) => [styles.savedReportsButton, pressed && styles.buttonPressed]}
               onPress={() => {
                 setSavedDraft(null);
-                router.push("/reports");
+                router.push("/(tabs)/history");
               }}
             >
               <Text style={styles.savedReportsButtonText}>View saved reports</Text>
@@ -372,90 +435,235 @@ export default function NewReportScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F4F6F1",
   },
   scrollView: {
     flex: 1,
+  },
+  fixedHeader: {
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    paddingHorizontal: 16,
   },
   content: {
     padding: 16,
     paddingBottom: 32,
   },
+  heading: {
+    marginBottom: 16,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#C6D4CA",
+    backgroundColor: "#FFFFFF",
+  },
+  eyebrow: {
+    color: "#D86E43",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
   title: {
-    fontSize: 25,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 8,
+    flex: 1,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "800",
+    color: "#182823",
   },
   description: {
-    color: "#4B5563",
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 20,
+    color: "#68756D",
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 6,
+  },
+  progressCard: {
+    padding: 14,
+    marginBottom: 14,
+    borderRadius: 12,
+    backgroundColor: "#E3EFE7",
+    borderWidth: 1,
+    borderColor: "#C6D9CB",
+  },
+  progressHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  progressTitle: {
+    color: "#182823",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  progressCaption: {
+    color: "#68756D",
+    fontSize: 10,
+    marginTop: 3,
+  },
+  progressPercent: {
+    color: "#24634F",
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  progressTrack: {
+    height: 6,
+    overflow: "hidden",
+    borderRadius: 3,
+    backgroundColor: "#FFFFFF",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: "#24634F",
+  },
+  progressHint: {
+    color: "#52685B",
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 8,
   },
   card: {
     backgroundColor: "#FFFFFF",
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderWidth: 1.25,
+    borderColor: "#C6D4CA",
+  },
+  sectionHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14,
+  },
+  sectionIcon: {
+    width: 38,
+    height: 38,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 12,
+  },
+  periodIcon: {
+    backgroundColor: "#E3EFE7",
+  },
+  detailsIcon: {
+    backgroundColor: "#F9E9DF",
+  },
+  sectionHeadingCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  stepBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: "#F5F0E7",
+  },
+  stepBadgeReady: {
+    backgroundColor: "#E3EFE7",
+  },
+  stepBadgeText: {
+    color: "#9A6334",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  stepBadgeTextReady: {
+    color: "#24634F",
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 14,
-    color: "#111827",
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#182823",
+  },
+  sectionCaption: {
+    color: "#68756D",
+    fontSize: 10,
+    marginTop: 3,
   },
   fieldLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#34453C",
     marginTop: 12,
     marginBottom: 6,
   },
   periodBox: {
-    backgroundColor: "#EFF6FF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    backgroundColor: "#F2F7F3",
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#C6D9CB",
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   invalidPeriodBox: {
     backgroundColor: "#FEF2F2",
     borderColor: "#FCA5A5",
   },
   periodValue: {
-    color: "#1D4ED8",
-    fontSize: 16,
-    fontWeight: "700",
+    flex: 1,
+    color: "#24634F",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
   },
   helper: {
-    fontSize: 12,
+    fontSize: 10,
     lineHeight: 18,
-    color: "#6B7280",
+    color: "#68756D",
     marginTop: 10,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
+    borderColor: "#D5DED7",
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 11,
-    fontSize: 15,
+    minHeight: 48,
+    fontSize: 14,
     backgroundColor: "#FFFFFF",
+    color: "#182823",
+  },
+  inputFocused: {
+    borderColor: "#24634F",
+    borderWidth: 1.5,
+    backgroundColor: "#FBFDFC",
   },
   primaryButton: {
-    backgroundColor: "#2563EB",
-    padding: 15,
-    borderRadius: 10,
+    minHeight: 52,
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
+    gap: 9,
+    backgroundColor: "#24634F",
+    paddingHorizontal: 16,
+    borderRadius: 12,
     marginBottom: 16,
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  saveHint: {
+    color: "#68756D",
+    fontSize: 10,
+    textAlign: "center",
+    marginTop: -7,
+    marginBottom: 12,
   },
   modalOverlay: {
     flex: 1,
@@ -476,31 +684,31 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#E3EFE7",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 14,
   },
   savedMarkText: {
-    color: "#15803D",
+    color: "#24634F",
     fontSize: 26,
     fontWeight: "700",
   },
   savedEyebrow: {
-    color: "#15803D",
+    color: "#24634F",
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.8,
   },
   savedTitle: {
-    color: "#111827",
+    color: "#182823",
     fontSize: 23,
     fontWeight: "700",
     textAlign: "center",
     marginTop: 6,
   },
   savedDescription: {
-    color: "#64748B",
+    color: "#68756D",
     fontSize: 14,
     lineHeight: 21,
     textAlign: "center",
@@ -508,10 +716,10 @@ const styles = StyleSheet.create({
   },
   savedDetails: {
     width: "100%",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F5F8F5",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 10,
+    borderColor: "#D5E0D8",
+    borderRadius: 12,
     paddingHorizontal: 14,
     marginTop: 20,
     marginBottom: 18,
@@ -524,25 +732,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   savedDetailLabel: {
-    color: "#64748B",
+    color: "#68756D",
     fontSize: 13,
   },
   savedDetailValue: {
     flex: 1,
-    color: "#0F172A",
+    color: "#182823",
     fontSize: 13,
     fontWeight: "600",
     textAlign: "right",
   },
   savedDetailDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#D5E0D8",
   },
   continueButton: {
     width: "100%",
     minHeight: 48,
-    backgroundColor: "#1D4ED8",
-    borderRadius: 8,
+    backgroundColor: "#24634F",
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -559,11 +767,15 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   savedReportsButtonText: {
-    color: "#475569",
+    color: "#24634F",
     fontSize: 14,
     fontWeight: "600",
   },
   buttonPressed: {
-    opacity: 0.72,
+    opacity: 0.78,
+    transform: [{ scale: 0.98 }],
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });

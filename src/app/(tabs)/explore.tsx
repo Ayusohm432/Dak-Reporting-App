@@ -1,180 +1,295 @@
-import { Image } from 'expo-image';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSQLiteContext } from 'expo-sqlite';
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import BrandHeader from '@/components/brand-header';
+import { getProfile, getReports, saveProfile, type ReportSummary, type UserProfile } from '@/database/reportRepository';
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
-  };
-  const theme = useTheme();
+const colors = { ink: '#182823', muted: '#68756D', canvas: '#F4F6F1', paper: '#FFFFFF', line: '#E1E7DF', green: '#24634F', greenSoft: '#E3EFE7', orange: '#D86E43', orangeSoft: '#F9E9DF' };
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+const emptyProfile: UserProfile = {
+  id: 'primary_user',
+  fullName: '',
+  designation: '',
+  mobile: '',
+  block: '',
+  district: '',
+  organization: 'CLF Foolmala Jeevika',
+  status: 'Active',
+  createdAt: '',
+  updatedAt: '',
+};
+
+const destinations = [
+  { title: 'Location directory', subtitle: 'Browse saved districts and blocks', route: '/settings/master-data', iosIcon: 'map.fill', androidIcon: 'map', tone: 'green' },
+  { title: 'Report history', subtitle: 'Search reports across all periods', route: '/(tabs)/history', iosIcon: 'clock.arrow.circlepath', androidIcon: 'history', tone: 'orange' },
+  { title: 'Share reports', subtitle: 'Prepare an Excel workbook or PDF', route: '/(tabs)/share', iosIcon: 'square.and.arrow.up', androidIcon: 'ios_share', tone: 'green' },
+] as const;
+
+export default function ProfileScreen() {
+  const db = useSQLiteContext();
+  const [reports, setReports] = useState<ReportSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<UserProfile>(emptyProfile);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [form, setForm] = useState<UserProfile>(emptyProfile);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProfileData() {
+      try {
+        const [savedProfile, savedReports] = await Promise.all([
+          getProfile(db),
+          getReports(db),
+        ]);
+
+        if (!active) return;
+
+        const nextProfile = savedProfile ?? { ...emptyProfile, createdAt: new Date().toISOString() };
+
+        setProfile(nextProfile);
+        setForm(nextProfile);
+        setReports(savedReports);
+
+        if (!savedProfile) {
+          setEditorOpen(true);
+        }
+      } catch (error) {
+        console.error('Failed to load profile data:', error);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadProfileData();
+
+    return () => {
+      active = false;
+    };
+  }, [db]);
+
+  const profileDetails = [
+    { label: 'Organization', value: profile.organization || 'CLF Foolmala Jeevika' },
+    { label: 'Designation', value: profile.designation || 'Field Reporting Officer' },
+    { label: 'District', value: profile.district || 'Not added' },
+    { label: 'Block', value: profile.block || 'Not added' },
+    { label: 'Mobile', value: profile.mobile || 'Not added' },
+    { label: 'Status', value: profile.status || 'Active' },
+  ] as const;
+
+  const districts = new Set(reports.map((report) => report.district.trim().toLocaleLowerCase())).size;
+  const blocks = new Set(reports.map((report) => `${report.district.trim()}|${report.block.trim()}`.toLocaleLowerCase())).size;
+
+  function openEditor() {
+    setForm(profile);
+    setEditorOpen(true);
+  }
+
+  function handleProfileField(key: keyof UserProfile, value: string) {
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  async function saveProfileData() {
+    const normalized = {
+      ...emptyProfile,
+      ...profile,
+      ...form,
+      id: 'primary_user',
+      fullName: form.fullName.trim() || profile.fullName || 'CLF Member',
+      designation: form.designation.trim() || 'Field Reporting Officer',
+      mobile: form.mobile.trim(),
+      block: form.block.trim(),
+      district: form.district.trim(),
+      organization: form.organization.trim() || 'CLF Foolmala Jeevika',
+      status: form.status.trim() || 'Active',
+      createdAt: form.createdAt || profile.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } satisfies UserProfile;
+
+    try {
+      const saved = await saveProfile(db, normalized);
+      setProfile(saved);
+      setForm(saved);
+      setEditorOpen(false);
+    } catch (error) {
+      console.error('Profile save failed:', error);
+      Alert.alert('Profile save failed', 'Please try again.');
+    }
+  }
 
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <View style={styles.screen}>
+      <View style={styles.fixedHeader}><BrandHeader /></View>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
+        <View style={styles.headingWrap}>
+          <View style={styles.heading}>
+            <Text style={styles.eyebrow}>ORGANIZATION</Text>
+            <Text style={styles.title}>Your workspace</Text>
+            <Text style={styles.subtitle}>CLF Foolmala Jeevika reporting desk</Text>
+          </View>
+
+          <Pressable onPress={openEditor} style={styles.editButton} accessibilityRole="button">
+            <SymbolView name={{ ios: 'pencil', android: 'edit', web: 'edit' }} size={14} tintColor={colors.green} />
+            <Text style={styles.editText}>Edit</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.identity}>
+          <View style={styles.identityHeader}>
+            <View style={styles.identityMark}>
+              <SymbolView name={{ ios: 'leaf.fill', android: 'eco', web: 'eco' }} size={28} tintColor={colors.paper} />
+            </View>
+            <View style={styles.identityCopy}>
+              <Text style={styles.identityKicker}>CLF MEMBER PROFILE</Text>
+              <Text style={styles.identityName}>{profile.fullName || 'CLF Member'}</Text>
+              <Text style={styles.identityCaption}>{profile.organization || 'CLF Foolmala Jeevika'} · Cluster Level Federation</Text>
+            </View>
+            <View style={styles.activeBadge}>
+              <View style={styles.activeDot} />
+              <Text style={styles.activeText}>{profile.status || 'Active'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.profileGrid}>
+            {profileDetails.map((detail) => (
+              <View key={detail.label} style={styles.profileItem}>
+                <Text style={styles.profileItemLabel}>{detail.label}</Text>
+                <Text style={styles.profileItemValue}>{detail.value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Reporting coverage</Text>
+          {loading ? <ActivityIndicator size="small" color={colors.green} /> : null}
+        </View>
+
+        <View style={styles.coverage}>
+          <View style={styles.coverageCell}>
+            <Text style={styles.coverageValue}>{loading ? '–' : reports.length}</Text>
+            <Text style={styles.coverageLabel}>Reports</Text>
+          </View>
+          <View style={styles.coverageDivider} />
+          <View style={styles.coverageCell}>
+            <Text style={styles.coverageValue}>{loading ? '–' : districts}</Text>
+            <Text style={styles.coverageLabel}>Districts</Text>
+          </View>
+          <View style={styles.coverageDivider} />
+          <View style={styles.coverageCell}>
+            <Text style={styles.coverageValue}>{loading ? '–' : blocks}</Text>
+            <Text style={styles.coverageLabel}>Blocks</Text>
+          </View>
+        </View>
+
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Workspace tools</Text>
+        </View>
+
+        <View style={styles.destinationList}>
+          {destinations.map((destination, index) => (
+            <Pressable key={destination.title} onPress={() => router.push(destination.route)} style={({ pressed }) => [styles.destination, index < destinations.length - 1 && styles.destinationBorder, pressed && styles.pressed]} accessibilityRole="button">
+              <View style={[styles.destinationIcon, destination.tone === 'orange' && styles.destinationIconOrange]}>
+                <SymbolView name={{ ios: destination.iosIcon, android: destination.androidIcon, web: destination.androidIcon }} size={18} tintColor={destination.tone === 'orange' ? colors.orange : colors.green} />
+              </View>
+              <View style={styles.destinationCopy}>
+                <Text style={styles.destinationTitle}>{destination.title}</Text>
+                <Text style={styles.destinationSubtitle}>{destination.subtitle}</Text>
+              </View>
+              <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={15} tintColor={colors.muted} />
             </Pressable>
-          </ExternalLink>
-        </ThemedView>
+          ))}
+        </View>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/(tabs)/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/(tabs)/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/(tabs)/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+        <Text style={styles.footer}>DAK Reporting • CLF Foolmala Jeevika</Text>
+      </ScrollView>
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and web. To open the web version, press{' '}
-                <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
+      <Modal transparent animationType="slide" visible={editorOpen} onRequestClose={() => setEditorOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{profile.fullName ? 'Edit profile details' : 'Register your profile'}</Text>
+            <Text style={styles.modalSubtitle}>Add your CLF member details and update them anytime.</Text>
 
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+            <TextInput value={form.fullName} onChangeText={(value) => handleProfileField('fullName', value)} style={styles.input} placeholder="Full name" placeholderTextColor="#84938A" />
+            <TextInput value={form.organization} onChangeText={(value) => handleProfileField('organization', value)} style={styles.input} placeholder="Organization" placeholderTextColor="#84938A" />
+            <TextInput value={form.designation} onChangeText={(value) => handleProfileField('designation', value)} style={styles.input} placeholder="Designation" placeholderTextColor="#84938A" />
+            <TextInput value={form.mobile} onChangeText={(value) => handleProfileField('mobile', value)} style={styles.input} placeholder="Mobile number" keyboardType="phone-pad" placeholderTextColor="#84938A" />
+            <TextInput value={form.district} onChangeText={(value) => handleProfileField('district', value)} style={styles.input} placeholder="District" placeholderTextColor="#84938A" />
+            <TextInput value={form.block} onChangeText={(value) => handleProfileField('block', value)} style={styles.input} placeholder="Block" placeholderTextColor="#84938A" />
 
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
-    </ScrollView>
+            <View style={styles.modalActions}>
+              <Pressable onPress={() => setEditorOpen(false)} style={[styles.secondaryButton]} accessibilityRole="button">
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={() => void saveProfileData()} style={styles.primaryButton} accessibilityRole="button">
+                <Text style={styles.primaryButtonText}>Save profile</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
-  },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
-  },
-  centerText: {
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
-  },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
-    alignItems: 'center',
-  },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
-  },
+  screen: { flex: 1, backgroundColor: colors.canvas },
+  fixedHeader: { width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 20 },
+  scroll: { flex: 1 },
+  content: { width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 130 },
+  headingWrap: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, marginTop: 26, marginBottom: 18 },
+  heading: { flex: 1 },
+  eyebrow: { color: colors.orange, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  title: { color: colors.ink, fontSize: 29, lineHeight: 36, fontWeight: '800', marginTop: 6 },
+  subtitle: { color: colors.muted, fontSize: 13, marginTop: 5 },
+  editButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#E6F0EA', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  editText: { color: colors.green, fontSize: 11, fontWeight: '800' },
+  identity: { minHeight: 180, padding: 15, borderRadius: 16, backgroundColor: '#DDEBE1', overflow: 'hidden' },
+  identityHeader: { flexDirection: 'row', alignItems: 'center', gap: 13 },
+  identityMark: { width: 54, height: 54, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: colors.green },
+  identityCopy: { flex: 1, minWidth: 0, gap: 4 },
+  identityKicker: { color: colors.green, fontSize: 8, fontWeight: '800', letterSpacing: 1 },
+  identityName: { color: colors.ink, fontSize: 20, lineHeight: 24, fontWeight: '800' },
+  identityCaption: { color: colors.muted, fontSize: 10, lineHeight: 15 },
+  activeBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#F4F9F5', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 6 },
+  activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.green },
+  activeText: { color: colors.green, fontSize: 9, fontWeight: '800' },
+  profileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
+  profileItem: { width: '48%', minHeight: 68, padding: 10, borderRadius: 12, backgroundColor: '#F7FAF8', borderWidth: 1, borderColor: '#D9E4DD' },
+  profileItemLabel: { color: colors.muted, fontSize: 9, fontWeight: '700', letterSpacing: 0.7 },
+  profileItemValue: { color: colors.ink, fontSize: 12, fontWeight: '700', marginTop: 6 },
+  sectionHeading: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 11 },
+  sectionTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  coverage: { minHeight: 100, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line, borderRadius: 15, paddingVertical: 14 },
+  coverageCell: { flex: 1, alignItems: 'center', gap: 4 },
+  coverageValue: { color: colors.ink, fontSize: 23, fontWeight: '800' },
+  coverageLabel: { color: colors.muted, fontSize: 10 },
+  coverageDivider: { width: 1, height: 38, backgroundColor: colors.line },
+  destinationList: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line, borderRadius: 15, overflow: 'hidden' },
+  destination: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 12 },
+  destinationBorder: { borderBottomWidth: 1, borderBottomColor: colors.line },
+  destinationIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: colors.greenSoft },
+  destinationIconOrange: { backgroundColor: colors.orangeSoft },
+  destinationCopy: { flex: 1, gap: 4 },
+  destinationTitle: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  destinationSubtitle: { color: colors.muted, fontSize: 10 },
+  pressed: { backgroundColor: '#F4F8F3' },
+  footer: { color: colors.muted, fontSize: 9, textAlign: 'center', marginTop: 22 },
+  modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(24, 40, 35, 0.45)', padding: 22 },
+  modalCard: { backgroundColor: colors.paper, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: colors.line },
+  modalTitle: { color: colors.ink, fontSize: 22, fontWeight: '800' },
+  modalSubtitle: { color: colors.muted, fontSize: 12, marginTop: 6, marginBottom: 16 },
+  input: { minHeight: 46, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, backgroundColor: '#F7F9F7', color: colors.ink, fontSize: 13, marginBottom: 10 },
+  modalActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 12 },
+  primaryButton: { flex: 1, minHeight: 46, backgroundColor: colors.green, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  primaryButtonText: { color: colors.paper, fontSize: 12, fontWeight: '800' },
+  secondaryButton: { flex: 1, minHeight: 46, backgroundColor: '#EDF2EE', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  secondaryButtonText: { color: colors.ink, fontSize: 12, fontWeight: '700' },
 });

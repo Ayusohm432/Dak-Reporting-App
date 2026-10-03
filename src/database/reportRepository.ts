@@ -4,7 +4,9 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import {
   deserializeReport,
   serializeReport,
+  updateDraftReport,
   type DakReport,
+  type ReportStatus,
 } from "../models/DakReport";
 
 /**
@@ -57,6 +59,20 @@ export async function saveReport(
   );
 }
 
+export async function setReportStatus(
+  db: SQLiteDatabase,
+  id: string,
+  status: ReportStatus
+): Promise<void> {
+  const report = await getReportById(db, id);
+
+  if (!report) {
+    throw new Error("This report could not be found.");
+  }
+
+  await saveReport(db, updateDraftReport(report, { status }));
+}
+
 /**
  * Finds an existing report for the same district, block, and date range.
  */
@@ -92,6 +108,19 @@ export interface ReportSummary {
   block: string;
   coordinatorName: string;
   status: "draft" | "completed";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserProfile {
+  id: string;
+  fullName: string;
+  designation: string;
+  mobile: string;
+  block: string;
+  district: string;
+  organization: string;
+  status: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -165,6 +194,93 @@ export async function getReports(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }));
+}
+
+export async function getProfile(
+  db: SQLiteDatabase
+): Promise<UserProfile | null> {
+  const row = await db.getFirstAsync<{
+    id: string;
+    full_name: string;
+    designation: string;
+    mobile: string;
+    block: string;
+    district: string;
+    organization: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `SELECT *
+     FROM user_profile
+     ORDER BY updated_at DESC
+     LIMIT 1;`
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    designation: row.designation,
+    mobile: row.mobile,
+    block: row.block,
+    district: row.district,
+    organization: row.organization,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function saveProfile(
+  db: SQLiteDatabase,
+  profile: UserProfile
+): Promise<UserProfile> {
+  const now = new Date().toISOString();
+  const payload = {
+    ...profile,
+    updatedAt: now,
+  };
+
+  await db.runAsync(
+    `INSERT INTO user_profile (
+      id,
+      full_name,
+      designation,
+      mobile,
+      block,
+      district,
+      organization,
+      status,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      full_name = excluded.full_name,
+      designation = excluded.designation,
+      mobile = excluded.mobile,
+      block = excluded.block,
+      district = excluded.district,
+      organization = excluded.organization,
+      status = excluded.status,
+      updated_at = excluded.updated_at;`,
+    payload.id,
+    payload.fullName,
+    payload.designation,
+    payload.mobile,
+    payload.block,
+    payload.district,
+    payload.organization,
+    payload.status,
+    payload.createdAt || now,
+    payload.updatedAt
+  );
+
+  return payload;
 }
 
 /**

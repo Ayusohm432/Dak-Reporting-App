@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -7,6 +7,7 @@ import {
   FocusEvent,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -16,7 +17,9 @@ import {
 } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import { useSQLiteContext } from "expo-sqlite";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   REPORT_SECTIONS,
@@ -40,6 +43,7 @@ import {
 
 import {
   updateDraftReport,
+  completeReport,
   type DakReport,
 } from "../../models/DakReport";
 
@@ -105,14 +109,18 @@ export default function ReportEditorScreen() {
 
   const [report, setReport] = useState<DakReport | null>(null);
   const [sectionIndex, setSectionIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loadedReportId, setLoadedReportId] = useState<string | null>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [finishDialogVisible, setFinishDialogVisible] = useState(false);
+  const [exportDialogVisible, setExportDialogVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const focusedInputTarget = useRef<number | null>(null);
   const keyboardVisible = useRef(false);
 
   const section = REPORT_SECTIONS[sectionIndex];
+  const loading = Boolean(id) && loadedReportId !== id;
 
   function scrollToFocusedInput() {
     const target = focusedInputTarget.current;
@@ -135,10 +143,12 @@ export default function ReportEditorScreen() {
   useEffect(() => {
     const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
       keyboardVisible.current = true;
+      setIsKeyboardVisible(true);
       scrollToFocusedInput();
     });
     const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
       keyboardVisible.current = false;
+      setIsKeyboardVisible(false);
       focusedInputTarget.current = null;
     });
 
@@ -148,41 +158,42 @@ export default function ReportEditorScreen() {
     };
   }, []);
 
-  const loadReport = useCallback(async () => {
-    if (!id) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const saved = await getReportById(db, id);
-
-      if (!saved) {
-        Alert.alert(
-          "Report not found",
-          "This report may have been deleted."
-        );
-        return;
-      }
-
-      setReport(saved);
-    } catch (error) {
-      console.error("Load report failed:", error);
-
-      Alert.alert(
-        "Error",
-        "Could not load the report from local storage."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [db, id]);
-
   useEffect(() => {
-    void loadReport();
-  }, [loadReport]);
+    if (!id) return;
+
+    let active = true;
+
+    getReportById(db, id)
+      .then((saved) => {
+        if (!active) return;
+
+        if (!saved) {
+          Alert.alert(
+            "Report not found",
+            "This report may have been deleted."
+          );
+          return;
+        }
+
+        setReport(saved);
+      })
+      .catch((error) => {
+        if (!active) return;
+
+        console.error("Load report failed:", error);
+        Alert.alert(
+          "Error",
+          "Could not load the report from local storage."
+        );
+      })
+      .finally(() => {
+        if (active) setLoadedReportId(id);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [db, id]);
 
   function updateField(fieldId: string, value: unknown) {
     setReport((current) => {
@@ -299,21 +310,28 @@ export default function ReportEditorScreen() {
     if (sectionIndex < REPORT_SECTIONS.length - 1) {
       setSectionIndex((current) => current + 1);
     } else {
+      await finalizeReport();
+    }
+  }
+
+  async function finalizeReport() {
+    if (!report || saving) return;
+
+    setSaving(true);
+
+    try {
+      const completedReport = completeReport(report);
+      await saveReport(db, completedReport);
+      setReport(completedReport);
+      setFinishDialogVisible(true);
+    } catch (error) {
+      console.error("Final report submission failed:", error);
       Alert.alert(
-        "Form sections completed",
-        "Your answers are saved as a draft. Review the report before marking it complete.",
-        [
-          {
-            text: "Export",
-            style: "cancel",
-            onPress: chooseExportFormat,
-          },
-          {
-            text: "Saved Reports",
-            onPress: () => router.replace("/reports"),
-          },
-        ]
+        "Could not complete report",
+        error instanceof Error ? error.message : "Please try again."
       );
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -339,7 +357,7 @@ export default function ReportEditorScreen() {
           },
           {
             text: "Exit",
-            onPress: () => router.replace("/reports"),
+            onPress: () => router.replace("/(tabs)/history"),
           },
         ]
       );
@@ -369,15 +387,13 @@ export default function ReportEditorScreen() {
   }
 
   function chooseExportFormat() {
-    Alert.alert(
-      "Choose export format",
-      `${report?.block} · ${report?.reportingPeriod}`,
-      [
-        { text: "Excel", onPress: () => void exportCurrentReport("excel") },
-        { text: "PDF", onPress: () => void exportCurrentReport("pdf") },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
+    setFinishDialogVisible(false);
+    setExportDialogVisible(true);
+  }
+
+  function startExport(format: "excel" | "pdf") {
+    setExportDialogVisible(false);
+    void exportCurrentReport(format);
   }
 
   function renderSectionFields() {
@@ -475,14 +491,14 @@ export default function ReportEditorScreen() {
     );
   }
 
-  if (!report) {
+  if (!report || report.id !== id) {
     return (
       <View style={styles.center}>
         <Text style={styles.title}>Report unavailable</Text>
 
         <Pressable
           style={styles.primaryButton}
-          onPress={() => router.replace("/reports")}
+          onPress={() => router.replace("/(tabs)/history")}
         >
           <Text style={styles.primaryButtonText}>
             Return to saved reports
@@ -495,8 +511,9 @@ export default function ReportEditorScreen() {
   const progress = (sectionIndex + 1) / REPORT_SECTIONS.length;
 
   return (
+    <SafeAreaView style={styles.screen} edges={["top"]}>
     <KeyboardAvoidingView
-      style={styles.screen}
+      style={styles.keyboardScreen}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.topBar}>
@@ -528,6 +545,7 @@ export default function ReportEditorScreen() {
             ]}
           />
         </View>
+
       </View>
 
       <ScrollView
@@ -535,8 +553,6 @@ export default function ReportEditorScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
-        scrollsChildToFocus
       >
         <Text style={styles.title}>{section.title}</Text>
 
@@ -560,54 +576,158 @@ export default function ReportEditorScreen() {
         </Text>
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Pressable
-          style={styles.saveButton}
-          onPress={handleSaveAndExit}
-          disabled={saving}
-        >
-          <Text style={styles.saveButtonText}>
-            {saving ? "Saving..." : "Save draft"}
-          </Text>
-        </Pressable>
-
-        <View style={styles.navigationRow}>
+      <View style={[styles.footer, isKeyboardVisible && styles.keyboardFooter]}>
+        {isKeyboardVisible ? (
+          <View style={styles.keyboardNavigation}>
           <Pressable
             style={[
               styles.previousButton,
+              styles.chevronButton,
               sectionIndex === 0 && styles.disabledButton,
             ]}
             onPress={handlePrevious}
             disabled={sectionIndex === 0 || saving}
+            accessibilityRole="button"
+            accessibilityLabel="Previous section"
           >
-            <Text style={styles.previousText}>Previous</Text>
+            <SymbolView name={{ ios: "chevron.left", android: "chevron_left", web: "chevron_left" }} size={20} tintColor={sectionIndex === 0 ? "#AAB5AD" : "#24634F"} />
           </Pressable>
 
           <Pressable
             style={[
               styles.primaryButton,
-              styles.nextButton,
+              styles.chevronButton,
               saving && styles.disabledButton,
             ]}
             onPress={handleNext}
             disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel={sectionIndex === REPORT_SECTIONS.length - 1 ? "Finish report" : "Save and go to next section"}
           >
-            <Text style={styles.primaryButtonText}>
-              {sectionIndex === REPORT_SECTIONS.length - 1
-                ? "Finish"
-                : "Save & Next"}
-            </Text>
+            <SymbolView name={{ ios: "chevron.right", android: "chevron_right", web: "chevron_right" }} size={20} tintColor="#FFFFFF" />
           </Pressable>
-        </View>
+          </View>
+        ) : (
+          <>
+            <Pressable
+              style={styles.saveButton}
+              onPress={handleSaveAndExit}
+              disabled={saving}
+            >
+              <Text style={styles.saveButtonText}>
+                {saving ? "Saving..." : "Save draft"}
+              </Text>
+            </Pressable>
+
+            <View style={styles.navigationRow}>
+              <Pressable
+                style={[
+                  styles.previousButton,
+                  sectionIndex === 0 && styles.disabledButton,
+                ]}
+                onPress={handlePrevious}
+                disabled={sectionIndex === 0 || saving}
+              >
+                <Text style={styles.previousText}>Previous</Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.primaryButton,
+                  styles.nextButton,
+                  saving && styles.disabledButton,
+                ]}
+                onPress={handleNext}
+                disabled={saving}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {sectionIndex === REPORT_SECTIONS.length - 1
+                    ? "Finish"
+                    : "Save & Next"}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        )}
       </View>
+
+      <Modal transparent animationType="fade" visible={finishDialogVisible} onRequestClose={() => setFinishDialogVisible(false)}>
+        <View style={styles.dialogOverlay}>
+          <View style={styles.finishDialog}>
+            <View style={styles.finishIcon}>
+              <SymbolView name={{ ios: "checkmark", android: "check", web: "check" }} size={25} tintColor="#FFFFFF" />
+            </View>
+            <Text style={styles.dialogEyebrow}>FINAL SUBMISSION</Text>
+            <Text style={styles.dialogTitle}>Report completed</Text>
+            <Text style={styles.dialogDescription}>
+              {report.block} · {report.reportingPeriod}{"\n"}Your report is saved and marked completed.
+            </Text>
+            <Pressable onPress={chooseExportFormat} style={styles.dialogPrimaryButton} accessibilityRole="button">
+              <SymbolView name={{ ios: "square.and.arrow.up", android: "ios_share", web: "ios_share" }} size={16} tintColor="#FFFFFF" />
+              <Text style={styles.dialogPrimaryText}>Export report</Text>
+            </Pressable>
+            <Pressable onPress={() => router.replace("/(tabs)/history")} style={styles.dialogSecondaryButton} accessibilityRole="button">
+              <Text style={styles.dialogSecondaryText}>Go to saved reports</Text>
+            </Pressable>
+            <Pressable onPress={() => setFinishDialogVisible(false)} style={styles.dialogDismiss} accessibilityRole="button">
+              <Text style={styles.dialogDismissText}>Continue reviewing</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal transparent animationType="fade" visible={exportDialogVisible} onRequestClose={() => setExportDialogVisible(false)}>
+        <View style={styles.dialogOverlay}>
+          <View style={styles.exportDialog}>
+            <View style={styles.exportDialogHeader}>
+              <View style={styles.exportDialogIcon}>
+                <SymbolView name={{ ios: "square.and.arrow.up", android: "ios_share", web: "ios_share" }} size={20} tintColor="#24634F" />
+              </View>
+              <Pressable onPress={() => setExportDialogVisible(false)} style={styles.dialogCloseButton} accessibilityRole="button" accessibilityLabel="Close export dialog">
+                <SymbolView name={{ ios: "xmark", android: "close", web: "close" }} size={14} tintColor="#68756D" />
+              </Pressable>
+            </View>
+            <Text style={styles.dialogEyebrow}>COMPLETED REPORT</Text>
+            <Text style={styles.exportDialogTitle}>Choose a format</Text>
+            <Text style={styles.dialogDescription}>{report.block} · {report.reportingPeriod}</Text>
+            <Pressable onPress={() => startExport("pdf")} style={styles.exportFormatOption} accessibilityRole="button">
+              <View style={[styles.exportFormatIcon, styles.pdfFormatIcon]}>
+                <SymbolView name={{ ios: "doc.text", android: "picture_as_pdf", web: "picture_as_pdf" }} size={20} tintColor="#D86E43" />
+              </View>
+              <View style={styles.exportFormatCopy}>
+                <Text style={styles.exportFormatTitle}>PDF document</Text>
+                <Text style={styles.exportFormatHint}>Ready to review and share</Text>
+              </View>
+              <SymbolView name={{ ios: "chevron.right", android: "chevron_right", web: "chevron_right" }} size={15} tintColor="#68756D" />
+            </Pressable>
+            <Pressable onPress={() => startExport("excel")} style={styles.exportFormatOption} accessibilityRole="button">
+              <View style={styles.exportFormatIcon}>
+                <SymbolView name={{ ios: "tablecells", android: "grid_on", web: "grid_on" }} size={20} tintColor="#24634F" />
+              </View>
+              <View style={styles.exportFormatCopy}>
+                <Text style={styles.exportFormatTitle}>Excel workbook</Text>
+                <Text style={styles.exportFormatHint}>Editable full report data</Text>
+              </View>
+              <SymbolView name={{ ios: "chevron.right", android: "chevron_right", web: "chevron_right" }} size={15} tintColor="#68756D" />
+            </Pressable>
+            <Pressable onPress={() => setExportDialogVisible(false)} style={styles.exportCancel} accessibilityRole="button">
+              <Text style={styles.exportCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F4F6F1",
+  },
+  keyboardScreen: {
+    flex: 1,
   },
   center: {
     flex: 1,
@@ -620,7 +740,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: "#D5DED7",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -628,12 +748,12 @@ const styles = StyleSheet.create({
   topBarTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
+    color: "#182823",
   },
   draftLabel: {
     fontSize: 12,
-    color: "#047857",
-    backgroundColor: "#D1FAE5",
+    color: "#24634F",
+    backgroundColor: "#E3EFE7",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
@@ -649,17 +769,17 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
-    color: "#4B5563",
+    color: "#68756D",
   },
   progressTrack: {
     height: 6,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#DCE5DE",
     borderRadius: 10,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    backgroundColor: "#2563EB",
+    backgroundColor: "#24634F",
     borderRadius: 10,
   },
   scroll: {
@@ -672,63 +792,89 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 25,
     fontWeight: "700",
-    color: "#111827",
+    color: "#182823",
     marginBottom: 8,
   },
   description: {
     fontSize: 14,
-    color: "#6B7280",
+    color: "#68756D",
     lineHeight: 21,
     marginBottom: 18,
   },
   subsectionHeader: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E3EFE7",
     borderLeftWidth: 4,
-    borderLeftColor: "#2563EB",
+    borderLeftColor: "#24634F",
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 9,
     marginBottom: 12,
   },
   subsectionTitle: {
-    color: "#1D4ED8",
+    color: "#24634F",
     fontSize: 15,
     fontWeight: "700",
   },
   metadataCard: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E3EFE7",
     borderRadius: 10,
     padding: 13,
     marginBottom: 22,
   },
   metadataText: {
-    color: "#1D4ED8",
+    color: "#24634F",
     fontSize: 13,
     marginVertical: 3,
   },
   helper: {
-    color: "#6B7280",
+    color: "#68756D",
     fontSize: 12,
     lineHeight: 18,
     marginTop: 8,
   },
   footer: {
     backgroundColor: "#FFFFFF",
+    minHeight: 130,
     padding: 12,
     paddingBottom: Platform.OS === "ios" ? 24 : 12,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#D5DED7",
+    justifyContent: "center",
+  },
+  keyboardFooter: {
+    minHeight: 0,
+    padding: 0,
+    paddingBottom: 0,
+    borderTopWidth: 0,
+    backgroundColor: "transparent",
+    justifyContent: "center",
+  },
+  keyboardNavigation: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 52,
+    paddingHorizontal: 16,
+  },
+  chevronButton: {
+    width: 48,
+    height: 44,
+    flex: 0,
+    padding: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
   },
   saveButton: {
     alignItems: "center",
     padding: 11,
     borderWidth: 1,
-    borderColor: "#2563EB",
+    borderColor: "#24634F",
     borderRadius: 9,
     marginBottom: 10,
   },
   saveButtonText: {
-    color: "#2563EB",
+    color: "#24634F",
     fontWeight: "700",
   },
   navigationRow: {
@@ -740,15 +886,15 @@ const styles = StyleSheet.create({
     padding: 14,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: "#C6D4CA",
     borderRadius: 9,
   },
   previousText: {
-    color: "#374151",
+    color: "#34453C",
     fontWeight: "600",
   },
   primaryButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#24634F",
     padding: 14,
     borderRadius: 9,
     alignItems: "center",
@@ -762,5 +908,174 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.45,
+  },
+  dialogOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 22,
+    backgroundColor: "rgba(24, 40, 35, 0.5)",
+  },
+  finishDialog: {
+    width: "100%",
+    maxWidth: 420,
+    alignItems: "center",
+    padding: 22,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E1E7DF",
+  },
+  finishIcon: {
+    width: 54,
+    height: 54,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    backgroundColor: "#24634F",
+    marginBottom: 16,
+  },
+  dialogEyebrow: {
+    color: "#D86E43",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  dialogTitle: {
+    color: "#182823",
+    fontSize: 22,
+    fontWeight: "800",
+    marginTop: 6,
+  },
+  dialogDescription: {
+    color: "#68756D",
+    fontSize: 12,
+    lineHeight: 19,
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  dialogPrimaryButton: {
+    width: "100%",
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    backgroundColor: "#24634F",
+  },
+  dialogPrimaryText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  dialogSecondaryButton: {
+    width: "100%",
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#E3EFE7",
+    marginTop: 8,
+  },
+  dialogSecondaryText: {
+    color: "#24634F",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  dialogDismiss: {
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  dialogDismissText: {
+    color: "#68756D",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  exportDialog: {
+    width: "100%",
+    maxWidth: 440,
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E1E7DF",
+  },
+  exportDialogHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 15,
+  },
+  exportDialogIcon: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: "#E3EFE7",
+  },
+  dialogCloseButton: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 17,
+    backgroundColor: "#F1F4F1",
+  },
+  exportDialogTitle: {
+    color: "#182823",
+    fontSize: 21,
+    fontWeight: "800",
+    marginTop: 5,
+  },
+  exportFormatOption: {
+    minHeight: 66,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#E1E7DF",
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  exportFormatIcon: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 11,
+    backgroundColor: "#E3EFE7",
+  },
+  pdfFormatIcon: {
+    backgroundColor: "#F9E9DF",
+  },
+  exportFormatCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  exportFormatTitle: {
+    color: "#182823",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  exportFormatHint: {
+    color: "#68756D",
+    fontSize: 9,
+  },
+  exportCancel: {
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  exportCancelText: {
+    color: "#68756D",
+    fontSize: 11,
+    fontWeight: "700",
   },
 });

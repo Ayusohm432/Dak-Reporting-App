@@ -56,6 +56,21 @@ export async function initializeDatabase(
     ON reports (reporting_month, block);
   `);
 
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS user_profile (
+      id TEXT PRIMARY KEY NOT NULL,
+      full_name TEXT NOT NULL,
+      designation TEXT NOT NULL,
+      mobile TEXT NOT NULL,
+      block TEXT NOT NULL,
+      district TEXT NOT NULL,
+      organization TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
   // Read the current database schema version.
   const result = await db.getFirstAsync<{
     user_version: number;

@@ -20,7 +20,7 @@ import {
 import { SymbolView } from "expo-symbols";
 
 import { useSQLiteContext } from "expo-sqlite";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 import ReportingMonthPicker from "../../components/ReportingMonthPicker";
 
@@ -42,11 +42,17 @@ import {
 
 export default function ReportsScreen() {
   const db = useSQLiteContext();
+  const { district: routeDistrict, block: routeBlock } = useLocalSearchParams<{
+    district?: string;
+    block?: string;
+  }>();
+  const selectedLocation =
+    typeof routeDistrict === "string" && typeof routeBlock === "string";
 
   const [month, setMonth] = useState(() => getCurrentReportingMonth());
   const followsCurrentMonth = useRef(true);
 
-  const [showAllMonths, setShowAllMonths] = useState(false);
+  const [showAllMonths, setShowAllMonths] = useState(selectedLocation);
 
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +66,7 @@ export default function ReportsScreen() {
     try {
       const result = await getReports(
         db,
-        showAllMonths ? undefined : month
+        showAllMonths || selectedLocation ? undefined : month
       );
 
       setReports(result);
@@ -74,7 +80,7 @@ export default function ReportsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [db, month, showAllMonths]);
+  }, [db, month, selectedLocation, showAllMonths]);
 
   useEffect(() => {
     void loadReports();
@@ -269,6 +275,21 @@ export default function ReportsScreen() {
 
       <View style={styles.filterCard}>
         <Text style={styles.filterTitle}>Browse reports</Text>
+        {selectedLocation ? (
+          <View style={styles.locationFilter}>
+            <Text style={styles.locationFilterText} numberOfLines={1}>
+              {routeBlock} · {routeDistrict}
+            </Text>
+            <Pressable
+              onPress={() => router.replace("/reports")}
+              accessibilityRole="button"
+              accessibilityLabel="Clear location filter"
+              style={styles.clearLocationFilter}
+            >
+              <Text style={styles.clearLocationText}>Clear</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <ReportingMonthPicker
           value={month}
           onChange={handleMonthChange}
@@ -293,7 +314,13 @@ export default function ReportsScreen() {
         />
       ) : (
         <FlatList
-          data={reports}
+          extraData={routeDistrict}
+          data={selectedLocation
+            ? reports.filter((report) =>
+                report.district.toLocaleLowerCase() === routeDistrict.toLocaleLowerCase() &&
+                report.block.toLocaleLowerCase() === routeBlock.toLocaleLowerCase()
+              )
+            : reports}
           keyExtractor={(item) => item.id}
           renderItem={renderReport}
           contentContainerStyle={styles.listContent}
@@ -480,6 +507,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     marginBottom: 6,
+  },
+  locationFilter: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+    borderRadius: 6,
+    backgroundColor: "#E3EFE7",
+  },
+  locationFilterText: {
+    flex: 1,
+    color: "#24634F",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  clearLocationFilter: {
+    paddingHorizontal: 7,
+    paddingVertical: 6,
+  },
+  clearLocationText: {
+    color: "#24634F",
+    fontSize: 11,
+    fontWeight: "700",
   },
   filterButton: {
     padding: 11,
