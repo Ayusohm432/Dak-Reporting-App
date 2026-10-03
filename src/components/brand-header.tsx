@@ -29,7 +29,7 @@ export default function BrandHeader() {
         </View>
         <View style={styles.copy}>
           <Text style={styles.kicker}>CLUSTER LEVEL FEDERATION</Text>
-          <Text style={styles.name} numberOfLines={1}>Foolmala Jeevika</Text>
+          <Text style={styles.name} numberOfLines={1}>Reporting Application</Text>
           <Text style={styles.descriptor}>COMMUNITY REPORTING</Text>
         </View>
         <View style={styles.brandBadge}>
